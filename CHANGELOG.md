@@ -9,6 +9,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ward us
 ## [Unreleased]
 
 ### Added
+- High-severity `exposed-git-config` web exposure rule (`exposure.yaml`) with a dedicated `web-exposure-scanner`: probes `<origin>/.git/config` over GET with no redirects and a capped response body, uses a per-host cached `/.git/ward-<nonce>.probe` soft-404 baseline, requires raw `[core]` + `repositoryformatversion` lines, and suppresses HTML/login pages and normalized probe-identical replies without letting probe failures hide strict raw hits.
+- `web.origins` / `web.timeout` config section; scanning an `http(s)` target auto-probes its origin (and the opposite scheme).
 - `regex-scoped` pattern type: suppresses rule findings that fall inside a brace-delimited scope block (e.g. a `Route::middleware()->group()` closure), eliminating false positives for `AUTH-001` and `AUTH-005`.
 
 ### Fixed

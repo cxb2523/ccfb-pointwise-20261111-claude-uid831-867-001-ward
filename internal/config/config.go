@@ -9,12 +9,23 @@ import (
 
 // WardConfig is the top-level configuration loaded from ~/.ward/config.yaml.
 type WardConfig struct {
-	Severity  string          `yaml:"severity"`  // minimum severity to report: info, low, medium, high, critical
+	Severity  string          `yaml:"severity"` // minimum severity to report: info, low, medium, high, critical
 	Output    OutputConfig    `yaml:"output"`
 	Scanners  ScannersConfig  `yaml:"scanners"`
 	Rules     RulesConfig     `yaml:"rules"`
+	Web       WebConfig       `yaml:"web"`
 	AI        AIConfig        `yaml:"ai"`
 	Providers ProvidersConfig `yaml:"providers"`
+}
+
+// WebConfig controls HTTP exposure checks (e.g. exposed-git-config).
+type WebConfig struct {
+	// Origins are the web roots to probe. URLs are joined by origin only:
+	// requests always hit <origin>/.git/..., never a business base path.
+	Origins []string `yaml:"origins"`
+	// Timeout is the per-request deadline as a duration string (e.g. "10s").
+	// Empty uses the built-in default; unparseable values are ignored.
+	Timeout string `yaml:"timeout"`
 }
 
 // OutputConfig controls report formats and destinations.
@@ -31,9 +42,9 @@ type ScannersConfig struct {
 
 // RulesConfig controls rule overrides and custom rules.
 type RulesConfig struct {
-	Disable  []string                `yaml:"disable"`  // rule IDs to disable
-	Override map[string]RuleOverride `yaml:"override"`  // rule ID → overrides
-	CustomDirs []string              `yaml:"custom_dirs"` // extra dirs to load rules from
+	Disable    []string                `yaml:"disable"`     // rule IDs to disable
+	Override   map[string]RuleOverride `yaml:"override"`    // rule ID → overrides
+	CustomDirs []string                `yaml:"custom_dirs"` // extra dirs to load rules from
 }
 
 // RuleOverride lets users change severity or disable a built-in rule.

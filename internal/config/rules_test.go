@@ -118,3 +118,46 @@ func TestApplyOverrides(t *testing.T) {
 		t.Errorf("severity should be overridden to critical, got %q", result[0].Severity)
 	}
 }
+
+func TestLoadEmbeddedRules_IncludesExposedGitConfig(t *testing.T) {
+	rules, err := LoadEmbeddedRules()
+	if err != nil {
+		t.Fatalf("LoadEmbeddedRules: %v", err)
+	}
+
+	rule := FindRule(rules, "exposed-git-config")
+	if rule == nil {
+		t.Fatal("embedded defaults must include exposed-git-config (exposure.yaml)")
+	}
+	if !rule.Enabled {
+		t.Error("exposed-git-config should be enabled by default")
+	}
+	if rule.Severity != "high" {
+		t.Errorf("severity = %q, want high", rule.Severity)
+	}
+	if FindRule(rules, "does-not-exist") != nil {
+		t.Error("FindRule should return nil for unknown IDs")
+	}
+}
+
+func TestApplyRuleOverride(t *testing.T) {
+	rule := RuleDefinition{ID: "exposed-git-config", Severity: "high", Enabled: true}
+
+	if got := ApplyRuleOverride(rule, RulesConfig{Disable: []string{"exposed-git-config"}}); got != nil {
+		t.Error("disabled rule should resolve to nil")
+	}
+
+	falseVal := false
+	if got := ApplyRuleOverride(rule, RulesConfig{
+		Override: map[string]RuleOverride{"exposed-git-config": {Enabled: &falseVal}},
+	}); got != nil {
+		t.Error("override disabling the rule should resolve to nil")
+	}
+
+	got := ApplyRuleOverride(rule, RulesConfig{
+		Override: map[string]RuleOverride{"exposed-git-config": {Severity: "critical"}},
+	})
+	if got == nil || got.Severity != "critical" {
+		t.Errorf("severity override not applied, got %+v", got)
+	}
+}

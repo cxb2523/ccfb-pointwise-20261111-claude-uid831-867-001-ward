@@ -438,6 +438,10 @@ Requires network access. Results include CVE IDs, severity, affected version ran
 
 Pattern-based checks loaded from `~/.ward/rules/*.yaml` covering secrets, injection, XSS, debug, crypto, config, and auth categories.
 
+### web-exposure-scanner
+
+HTTP checks against deployed web roots. Currently ships the high-severity `exposed-git-config` rule: it GETs `<origin>/.git/config` (origin only — business base paths are stripped, redirects are not followed, response bodies are size-capped) and requires a raw git config body containing both a `[core]` section and a `repositoryformatversion` line. A random `/.git/ward-<nonce>.probe` request establishes a per-host soft-404 baseline for the scan; HTML/login pages and responses identical to the probe after normalization are suppressed, while probe failures never hide a strict raw-config hit. Origins come from `web.origins` in the config, or automatically when `ward scan` is given an `http(s)` target.
+
 ---
 
 ## Commands
@@ -445,7 +449,7 @@ Pattern-based checks loaded from `~/.ward/rules/*.yaml` covering secrets, inject
 | Command                          | Description                                                 |
 | -------------------------------- | ----------------------------------------------------------- |
 | `ward`                           | Show banner and usage                                       |
-| `ward init`                      | Create `~/.ward/` with default config and 40 security rules |
+| `ward init`                      | Create `~/.ward/` with default config and 41 security rules |
 | `ward init --force`              | Recreate config files (overwrites existing)                 |
 | `ward scan <path>`               | Scan a local Laravel project                                |
 | `ward scan <git-url>`            | Clone and scan a remote repository                          |
@@ -485,7 +489,7 @@ ward/
     │   ├── dirs.go                # ~/.ward/ directory management
     │   ├── rules.go               # YAML rule loading + overrides
     │   ├── init.go                # Scaffold with //go:embed defaults
-    │   └── defaults/rules/        # 8 embedded YAML rule files
+    │   └── defaults/rules/        # 9 embedded YAML rule files
     ├── models/                    # Shared types
     │   ├── severity.go
     │   ├── finding.go
@@ -509,7 +513,8 @@ ward/
     │   ├── env/scanner.go         # .env checks
     │   ├── configscan/scanner.go  # config/*.php checks
     │   ├── dependency/scanner.go  # CVE advisory checks
-    │   └── rules/scanner.go       # YAML rule engine
+    │   ├── rules/scanner.go       # YAML rule engine
+    │   └── web/scanner.go         # HTTP exposure checks (exposed-git-config)
     ├── reporter/                  # Report generators
     │   ├── reporter.go            # Interface
     │   ├── json.go

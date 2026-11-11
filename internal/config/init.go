@@ -34,6 +34,14 @@ rules:
   # custom_dirs: # extra directories to load rules from
   #   - /path/to/my-rules
 
+# HTTP exposure checks (e.g. exposed-git-config).
+# When scan target is an http(s) URL its origin is probed automatically;
+# list extra web roots here. Only the origin is used — paths are ignored.
+web:
+  origins: []
+  #  - https://app.example.com
+  timeout: 10s
+
 ai:
   enabled: false
   provider: openai

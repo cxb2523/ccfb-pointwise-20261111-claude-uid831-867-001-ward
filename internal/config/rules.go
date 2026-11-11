@@ -82,6 +82,49 @@ func LoadRulesFromDir(dir string) ([]RuleDefinition, error) {
 	return all, nil
 }
 
+// LoadEmbeddedRules loads the default YAML rules compiled into the binary.
+// It lets specialized scanners locate their built-in rule metadata even on
+// machines where `ward init` has never copied the defaults to ~/.ward/rules.
+func LoadEmbeddedRules() ([]RuleDefinition, error) {
+	entries, err := defaultRulesFS.ReadDir("defaults/rules")
+	if err != nil {
+		return nil, fmt.Errorf("reading embedded rules: %w", err)
+	}
+
+	var all []RuleDefinition
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if ext := filepath.Ext(entry.Name()); ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+
+		data, err := defaultRulesFS.ReadFile("defaults/rules/" + entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("reading embedded rule %s: %w", entry.Name(), err)
+		}
+
+		var rf RuleFile
+		if err := yaml.Unmarshal(data, &rf); err != nil {
+			return nil, fmt.Errorf("parsing embedded rule %s: %w", entry.Name(), err)
+		}
+		all = append(all, rf.Rules...)
+	}
+
+	return all, nil
+}
+
+// FindRule returns the rule with the given ID, or nil if absent.
+func FindRule(rules []RuleDefinition, id string) *RuleDefinition {
+	for i := range rules {
+		if rules[i].ID == id {
+			return &rules[i]
+		}
+	}
+	return nil
+}
+
 // LoadAllRules loads rules from ~/.ward/rules plus any extra directories
 // specified in the config.
 func LoadAllRules(cfg *WardConfig) ([]RuleDefinition, error) {
@@ -138,4 +181,26 @@ func applyOverrides(rules []RuleDefinition, rc RulesConfig) []RuleDefinition {
 	}
 
 	return result
+}
+
+// ApplyRuleOverride applies the RulesConfig disable/override settings to a
+// single rule (e.g. one loaded from the embedded defaults), returning nil
+// when the rule is disabled. Applying it twice is idempotent.
+func ApplyRuleOverride(rule RuleDefinition, rc RulesConfig) *RuleDefinition {
+	for _, id := range rc.Disable {
+		if id == rule.ID {
+			return nil
+		}
+	}
+
+	if ov, ok := rc.Override[rule.ID]; ok {
+		if ov.Severity != "" {
+			rule.Severity = ov.Severity
+		}
+		if ov.Enabled != nil && !*ov.Enabled {
+			return nil
+		}
+	}
+
+	return &rule
 }

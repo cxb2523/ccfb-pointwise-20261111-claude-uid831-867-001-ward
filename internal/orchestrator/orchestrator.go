@@ -17,6 +17,7 @@ import (
 	depscanner "github.com/eljakani/ward/internal/scanner/dependency"
 	envscanner "github.com/eljakani/ward/internal/scanner/env"
 	rulesscanner "github.com/eljakani/ward/internal/scanner/rules"
+	webscanner "github.com/eljakani/ward/internal/scanner/web"
 	"github.com/eljakani/ward/internal/store"
 )
 
@@ -66,6 +67,13 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.bus.Publish(eventbus.NewEvent(eventbus.EventLogMessage, eventbus.LogMessageData{
 			Level: "info", Message: fmt.Sprintf("Loaded %d custom rule(s)", len(customRules)),
 		}))
+	}
+
+	// HTTP exposure checks (exposed-git-config). The rule metadata lives in
+	// the embedded defaults so it exists even before `ward init`; user
+	// overrides from ~/.ward/rules take precedence when present.
+	if ws := o.buildWebScanner(customRules); ws != nil {
+		scanners = append(scanners, ws)
 	}
 
 	// Filter scanners based on config enable/disable lists
@@ -290,6 +298,55 @@ func (o *Orchestrator) isScannerDisabled(name string) bool {
 		}
 	}
 	return false
+}
+
+// buildWebScanner assembles the HTTP exposure scanner from the embedded
+// exposure.yaml rule and the configured/derived origins. It returns nil when
+// the rule is disabled, no origin is reachable from the scan target, or the
+// embedded rule is unavailable.
+func (o *Orchestrator) buildWebScanner(userRules []config.RuleDefinition) models.Scanner {
+	embedded, err := config.LoadEmbeddedRules()
+	if err != nil {
+		o.bus.Publish(eventbus.NewEvent(eventbus.EventLogMessage, eventbus.LogMessageData{
+			Level: "warn", Message: fmt.Sprintf("Failed to load embedded exposure rules: %v", err),
+		}))
+		return nil
+	}
+
+	rule := config.FindRule(embedded, webscanner.ExposedGitConfigRuleID)
+	if rule == nil {
+		return nil
+	}
+
+	// A rule copied to ~/.ward/rules replaces the embedded metadata; both
+	// then pass through the same disable/override configuration.
+	if userRule := config.FindRule(userRules, webscanner.ExposedGitConfigRuleID); userRule != nil {
+		rule = userRule
+	}
+	if rule = config.ApplyRuleOverride(*rule, o.cfg.Rules); rule == nil {
+		return nil
+	}
+
+	origins := webscanner.OriginsFromTarget(o.target, o.cfg.Web.Origins)
+	if len(origins) == 0 {
+		return nil
+	}
+
+	var opts []webscanner.Option
+	if o.cfg.Web.Timeout != "" {
+		if d, err := time.ParseDuration(o.cfg.Web.Timeout); err == nil {
+			opts = append(opts, webscanner.WithTimeout(d))
+		} else {
+			o.bus.Publish(eventbus.NewEvent(eventbus.EventLogMessage, eventbus.LogMessageData{
+				Level: "warn", Message: fmt.Sprintf("Ignoring invalid web.timeout %q: %v", o.cfg.Web.Timeout, err),
+			}))
+		}
+	}
+
+	o.bus.Publish(eventbus.NewEvent(eventbus.EventLogMessage, eventbus.LogMessageData{
+		Level: "info", Message: fmt.Sprintf("Web exposure checks will probe %d origin(s)", len(origins)),
+	}))
+	return webscanner.New(rule, origins, opts...)
 }
 
 func filterBySeverity(findings []models.Finding, minSeverity models.Severity) []models.Finding {

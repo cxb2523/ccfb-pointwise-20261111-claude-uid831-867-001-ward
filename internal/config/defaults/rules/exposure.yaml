@@ -1,0 +1,34 @@
+# Ward Default Rules — Web Exposure
+# HTTP exposure checks. The pattern type below is not implemented by the
+# generic YAML matcher: internal/scanner/web owns a dedicated, stateful
+# checker for it (soft-404 probing, response normalization, per-host cache).
+
+rules:
+  - id: exposed-git-config
+    title: "Exposed .git/config over HTTP"
+    description: >
+      The web server publicly serves the repository's .git/config file.
+      An exposed .git directory can be reconstructed to recover the full
+      source code, history, embedded secrets and deployment configuration.
+      A hit requires a raw git config body (a [core] section plus a
+      repositoryformatversion line); HTML pages, login screens and
+      soft-404 responses that merely echo the request path are suppressed.
+    severity: high
+    category: Exposure
+    enabled: true
+    tags: [exposure, git, owasp-a05, cwe-538]
+    patterns:
+      # Dedicated check type handled by internal/scanner/web — the generic
+      # rule engine intentionally does not know how to evaluate this.
+      - type: http-exposed-git-config
+    remediation: |
+      Block web access to dotfiles and the .git directory:
+        # Apache (.htaccess)
+        RedirectMatch 404 /\\.git
+        # Nginx
+        location ~ /\\.git { deny all; return 404; }
+      Verify the rule is part of the deployed server/vhost configuration,
+      not just the application, and rotate any secrets that may have leaked.
+    references:
+      - https://cwe.mitre.org/data/definitions/538.html
+      - https://owasp.org/www-community/attacks/Source_code_disclosure
